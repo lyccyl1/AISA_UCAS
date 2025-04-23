@@ -32,7 +32,7 @@ def get_dataset(opts):
     import torchvision.transforms as Transforms
     transforms = Transforms.Compose(
         [
-            Transforms.Resize((299, 299)),
+            Transforms.Resize((224, 224)),
             Transforms.ToTensor(),
             Transforms.Normalize([0.5] * 3, [0.5] * 3)
         ]
@@ -44,14 +44,19 @@ def get_dataset(opts):
 
 def get_model_runner(opts, dataset):
     ### tips: customize your model
+    from fsfm.fsfm3c import models_vit
+    from huggingface_hub import hf_hub_download
     import torch
-    from utils import Xception
-    model = Xception()
-    model.fc = torch.nn.Linear(2048, 1)
-    model.load_state_dict(
-        torch.load(opts.model_weights)
-    )
 
+    ckpt_path = "/data0/user/ycliu/AISA_UCAS/detection/checkpoints/best_model.pth"
+    model = models_vit.vit_base_patch16(
+        num_classes=2,
+        drop_path_rate=0.1,
+        global_pool=True,
+    )
+    checkpoint = torch.load(ckpt_path, map_location="cuda")
+    model.load_state_dict(checkpoint)
+    # return model
     # DO NOT change Runner
     runner = Runner(model, dataset)
     return runner

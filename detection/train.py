@@ -28,7 +28,7 @@ class SingleFolderDataset(Dataset):
         if self.transform:
             img = self.transform(img)
         fname = os.path.basename(path)
-        label = 0 if ('Celeb-real' in fname or 'YouTube-real' in fname) else 1
+        label = 1 if ('Celeb-real' in fname or 'YouTube-real' in fname) else 0
         return img, label
 
 
@@ -36,11 +36,11 @@ def get_opts():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-folder",   type=str,   default="/data0/user/ycliu/AISA_data/Celeb-DF-v2/target_pictures/results",
                         help="图片所在的文件夹路径，所有图片在同一目录下")
-    parser.add_argument("--save-path",     type=str,   default="./checkpoints",
+    parser.add_argument("--save-path",     type=str,   default="/data0/user/ycliu/AISA_UCAS/detection/checkpoints",
                         help="训练完成后模型权重保存目录")
     parser.add_argument("--batch-size",    type=int,   default=16,
                         help="训练和验证时的 batch size")
-    parser.add_argument("--epochs",        type=int,   default=20,
+    parser.add_argument("--epochs",        type=int,   default=4,
                         help="最大训练轮数")
     parser.add_argument("--lr",            type=float, default=1e-4,
                         help="初始学习率")
@@ -59,7 +59,7 @@ def get_opts():
 
 def get_transforms():
     return Transforms.Compose([
-        Transforms.Resize((299, 299)),
+        Transforms.Resize((224, 224)),
         Transforms.ToTensor(),
         Transforms.Normalize([0.5]*3, [0.5]*3),
     ])
@@ -87,28 +87,46 @@ def get_dataloaders(opts):
 
 
 def build_model():
-    model = Xception()
-    model.fc = nn.Linear(2048, 1)  # 二分类
+    from fsfm.fsfm3c import models_vit
+    from huggingface_hub import hf_hub_download
+
+    # 下载 ViT checkpoint 并加载
+    ckpt_dir = "/data0/user/ycliu/AISA_UCAS/detection/checkpoints"
+    os.makedirs(ckpt_dir, exist_ok=True)
+    ckpt_filename = "finetuned_models/FF++_DF_c23_32frames/checkpoint-min_val_loss_FE.pth"
+
+    ckpt_path = hf_hub_download(
+        repo_id="Wolowolo/fsfm-3c",
+        filename=ckpt_filename,
+        local_dir=ckpt_dir
+    )
+
+    model = models_vit.vit_base_patch16(
+        num_classes=2,
+        drop_path_rate=0.1,
+        global_pool=True,
+    )
+    checkpoint = torch.load(ckpt_path, map_location="cuda")
+    model.load_state_dict(checkpoint["model"])
     return model
 
 
 def evaluate(model, loader, device):
     model.eval()
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
     running_loss = 0.0
     correct = 0
     total = len(loader.dataset)
-    for imgs, labels in tqdm(loader, desc="Validation", leave=False):
-        imgs = imgs.to(device)
-        labels = labels.float().unsqueeze(1).to(device)
-        outputs = model(imgs)
-        loss = criterion(outputs, labels)
-        running_loss += loss.item() * imgs.size(0)
-        preds = (torch.sigmoid(outputs) > 0.5).long()
-        correct += (preds == labels.long()).sum().item()
-    avg_loss = running_loss / total
-    acc = correct / total
-    return avg_loss, acc
+    with torch.no_grad():
+        for imgs, labels in tqdm(loader, desc="Validation", leave=False):
+            imgs = imgs.to(device)
+            labels = labels.to(device)               # LongTensor [batch]
+            outputs = model(imgs)                    # [batch,2]
+            loss = criterion(outputs, labels)
+            running_loss += loss.item() * imgs.size(0)
+            preds = outputs.argmax(dim=1)            # [batch]
+            correct += (preds == labels).sum().item()
+    return running_loss / total, correct / total
 
 
 def train():
@@ -116,18 +134,10 @@ def train():
     os.makedirs(opts.save_path, exist_ok=True)
 
     train_loader, val_loader = get_dataloaders(opts)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model().to(device)
 
-    # 加载预训练模型（如果提供）
-    if opts.pretrained_model:
-        assert os.path.isfile(opts.pretrained_model), f"预训练模型文件不存在: {opts.pretrained_model}"
-        checkpoint = torch.load(opts.pretrained_model, map_location=device)
-        model.load_state_dict(checkpoint)
-        print(f"已加载预训练模型: {opts.pretrained_model}")
-
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(
         model.parameters(),
         lr=opts.lr,
@@ -143,12 +153,12 @@ def train():
     for epoch in range(1, opts.epochs + 1):
         model.train()
         running_loss = 0.0
-        for imgs, labels in tqdm(train_loader, desc=f"Epoch {epoch}/{opts.epochs} - Training"):  
+        for imgs, labels in tqdm(train_loader, desc=f"Epoch {epoch}/{opts.epochs} - Training"):
             imgs = imgs.to(device)
-            labels = labels.float().unsqueeze(1).to(device)
+            labels = labels.to(device)               # LongTensor [batch]
 
             optimizer.zero_grad()
-            outputs = model(imgs)
+            outputs = model(imgs)                    # [batch,2]
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -168,6 +178,7 @@ def train():
         scheduler.step()
 
     torch.save(model.state_dict(), os.path.join(opts.save_path, "last_model.pth"))
+
 
 if __name__ == "__main__":
     train()
