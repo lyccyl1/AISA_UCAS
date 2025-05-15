@@ -37,6 +37,8 @@ Teaching Assistant (TA): Zheling Meng, Ph.D. Candidate, Institute of Automation 
 |AISC is my goal|	Week 10	|0.8523	|0.0398|
 
 #### Test 2 
+|Team | AUC | Time |
+|:-----:|:----:|:------:|
 |AISC is my goal|	0.8624 |	0.0238 |
 
 ## Deepfake Generation
