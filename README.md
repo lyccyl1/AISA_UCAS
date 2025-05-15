@@ -1,4 +1,4 @@
-# ✨ DeepfakesAdvTrack - Spring 2025
+# ✨ DeepfakesAdvTrack - Spring 2025 - AISC is mygo
 Hi, every one! 
 
 This is the official repository for DeepfakesAdvTrack, the practice session of the course **Artificial Intelligence Security, Attacks and Defenses** which is offered to graduate students of UCAS in the spring of 2025.
@@ -34,12 +34,15 @@ Teaching Assistant (TA): Zheling Meng, Ph.D. Candidate, Institute of Automation 
 ### Week 8
 |Team | AUC | Time |
 |:-----:|:----:|:------:|
-|Baseline| - | - |
+|AISC is my goal|	Week 10	|0.8523	|0.0398|
 
+#### Test 2 
+|AISC is my goal|	0.8624 |	0.0238 |
 
 ## Deepfake Generation
 ### Week 8
 |Team | SSIM | Noise | ID_score | AntiDet_score | Overall_score |
 |:-----:|:----:|:------:|:----:|:------:|:----:|
 |Baseline| - | - | - | - | - | - |
+|AISC is my goal|	Week 8|	0.9559	|-0.1025	|0.6237	|0.7184|	2.1955|
 
